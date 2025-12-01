@@ -1,7 +1,7 @@
 from airflow.decorators import dag, task
 from datetime import datetime, timedelta
 from config.airflow_default_args import default_args
-from src.extract.neo_api_client import extract_nasa_data
+from src.extract.neo_api_client import extract_data_and_load_to_aws
 
 @dag(
   dag_id="nasa_neo_pipeline",
@@ -17,8 +17,7 @@ from src.extract.neo_api_client import extract_nasa_data
 def neo_pipeline():
   @task
   def extract_data():
-    last_week = (datetime.now() - timedelta(weeks=1)).strftime('%Y-%m-%d')
-    return extract_nasa_data(last_week)
+    extract_data_and_load_to_aws()
   
   @task
   def transform_data():
@@ -28,8 +27,8 @@ def neo_pipeline():
   def load_data():
     return load_nasa_data()
   
-  extracted_data = extract_data()
-  transformed_data = transform_data(extracted_data)
-  loaded_data = load_data(transformed_data)
+  extract_data()
+  transform_data()
+  load_data()
 
   log_summary(loaded_data)

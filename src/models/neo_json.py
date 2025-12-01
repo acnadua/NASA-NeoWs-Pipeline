@@ -13,7 +13,7 @@ approach_data = StructType([
   StructField("orbiting_body", StringType())
 ])
 
-asteroid_schema = StructType([
+neo_json_schema = StructType([
   StructField("links", MapType(StringType(), StringType())),
   StructField("id", StringType()),
   StructField("neo_reference_id", StringType()),
