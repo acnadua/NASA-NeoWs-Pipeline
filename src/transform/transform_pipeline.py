@@ -1,10 +1,4 @@
-import boto3
-from config.constants import (
-    AWS_ACCESS_KEY, AWS_SECRET_KEY, 
-    AWS_REGION
-)
 from config.logger import logger
-from src.transform.aws_access import get_raw_json_from_aws, mark_as_processed
 from src.models import neo_json_schema
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import (
@@ -13,26 +7,7 @@ from pyspark.sql.functions import (
     when, abs, hash
 )
 
-
-def transform_raw_data_from_aws():
-    s3 = boto3.client("s3",
-        aws_access_key_id=AWS_ACCESS_KEY,
-        aws_secret_access_key=AWS_SECRET_KEY,
-        region_name=AWS_REGION
-    )
-
-    try:
-        raw_data = get_raw_json_from_aws(s3)
-        for item in raw_data:
-            status = _transform_raw_data(item)
-            mark_as_processed(s3, item["key"], status)
-    except Exception as e:
-        logger.error(f"Error getting raw data from AWS: {e}")
-        raise
-    finally:
-        s3.close()
-
-def _transform_raw_data(raw_data: dict):  
+def transform_raw_data(raw_data: dict):  
     if not raw_data:
         logger.warning("No raw data to transform")
         return None
@@ -130,6 +105,11 @@ def _transform_raw_data(raw_data: dict):
 
         # TODO:
         # 6. create celestial body table
+
+        # TODO:
+        # 7. create hazard status table
+
+        # TODO: store processed data in S3
     
         status = "completed"
     except Exception as e:
