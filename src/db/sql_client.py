@@ -156,10 +156,8 @@ class SQLClient:
 
     def _create_approach_table(self):
         command = """
-            CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
             CREATE TABLE IF NOT EXISTS close_approaches (
-                id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                id SERIAL PRIMARY KEY,
                 reference_id BIGINT,
                 close_approach_date_stamp TIMESTAMPTZ,
                 relative_velocity_kms NUMERIC,
