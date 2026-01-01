@@ -31,6 +31,25 @@ class SQLClient:
         self._create_approach_table()
 
         # create indices
+        self._create_indices()
+
+    def _create_indices(self):
+        commands = [
+            # foreign key indices
+            "CREATE INDEX IF NOT EXISTS idx_approaches_reference_id ON close_approaches (reference_id);",
+            "CREATE INDEX IF NOT EXISTS idx_approaches_orbiting_body ON close_approaches (orbiting_body);",
+            # time series optimization
+            "CREATE INDEX IF NOT EXISTS idx_approaches_date ON close_approaches (close_approach_date_stamp DESC);",
+            # optimization for searching high-threat objects
+            "CREATE INDEX IF NOT EXISTS idx_hazardous_neos ON near_earth_objects (reference_id) WHERE is_potentially_hazardous IS TRUE;",
+            # optimization for querying closest approaches of the year
+            "CREATE INDEX IF NOT EXISTS idx_approaches_date_distance ON close_approaches (close_approach_date_stamp, miss_distance_km);"
+        ]
+
+        for command in commands:
+            self.cursor.execute(command)
+
+        self.conn.commit()
 
     def store_neo_data(self, neo_df: DataFrame):
         for _, row in neo_df.iterrows():
