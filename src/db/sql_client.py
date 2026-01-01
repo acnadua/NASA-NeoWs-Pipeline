@@ -3,27 +3,31 @@ from pandas import DataFrame
 from src.utils.logger import logger
 from src.utils.constants import (
     DB_NAME, DB_USER, DB_PASSWORD, 
-    DB_HOST, DB_PORT, DB_SCHEMA
+    DB_HOST, DB_PORT, DB_SCHEMA, DB_URL
 )
 
 class SQLClient:
     def __init__(self):
-        self.conn = pg.connect(
-            dbname=DB_NAME,
-            user=DB_USER,
-            password=DB_PASSWORD,
-            host=DB_HOST,
-            port=DB_PORT
-        )
+        if DB_URL:
+            self.conn = pg.connect(DB_URL)
+        else:
+            self.conn = pg.connect(
+                dbname=DB_NAME,
+                user=DB_USER,
+                password=DB_PASSWORD,
+                host=DB_HOST,
+                port=DB_PORT
+            )
 
         self.cursor = self.conn.cursor()
         self._initialize()
 
     def _initialize(self):
-        self.cursor.execute(f"CREATE SCHEMA IF NOT EXISTS {DB_SCHEMA}")
-        self.conn.commit()
+        if not DB_URL:
+            self.cursor.execute(f"CREATE SCHEMA IF NOT EXISTS {DB_SCHEMA}")
+            self.conn.commit()
 
-        self.cursor.execute(f"SET search_path TO {DB_SCHEMA}")
+            self.cursor.execute(f"SET search_path TO {DB_SCHEMA}")
 
         # create tables
         self._create_neo_table()
