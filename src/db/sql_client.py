@@ -23,7 +23,7 @@ class SQLClient:
         self._initialize()
 
     def _initialize(self):
-        if not DB_URL:
+        if not DB_URL and DB_SCHEMA:
             self.cursor.execute(f"CREATE SCHEMA IF NOT EXISTS {DB_SCHEMA}")
             self.conn.commit()
 
