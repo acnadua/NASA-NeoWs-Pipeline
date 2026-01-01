@@ -3,7 +3,7 @@ from pandas import DataFrame
 from src.utils.logger import logger
 from src.utils.constants import (
     DB_NAME, DB_USER, DB_PASSWORD, 
-    DB_HOST, DB_PORT
+    DB_HOST, DB_PORT, DB_SCHEMA
 )
 
 class SQLClient:
@@ -16,12 +16,26 @@ class SQLClient:
             port=DB_PORT
         )
 
-    def store_neo_data(self, neo_df: DataFrame):
-        self._create_neo_table()
+        self.cursor = self.conn.cursor()
+        self._initialize()
 
+    def _initialize(self):
+        self.cursor.execute(f"CREATE SCHEMA IF NOT EXISTS {DB_SCHEMA}")
+        self.conn.commit()
+
+        self.cursor.execute(f"SET search_path TO {DB_SCHEMA}")
+
+        # create tables
+        self._create_neo_table()
+        self._create_orbiting_body_table()
+        self._create_approach_table()
+
+        # create indices
+
+    def store_neo_data(self, neo_df: DataFrame):
         for _, row in neo_df.iterrows():
             # make sure to upsert data to avoid duplicates
-            query = """
+            command = """
                 INSERT INTO near_earth_objects (
                     reference_id, neo_name, nasa_jpl_url,
                     absolute_magnitude_h, estimated_diameter_min_km,
@@ -45,25 +59,22 @@ class SQLClient:
                 row["is_sentry_object"]
             )
 
-            self._execute_query(query, params)
+            self.cursor.execute(command, params)
             self.conn.commit()
 
             logger.info(f"Updated data stored in database for NEO: {row['reference_id']}")
 
     def store_approach_data(self, approach_df: DataFrame):
-        self._create_orbiting_body_table()
-        self._create_approach_table()
-
         for _, row in approach_df.iterrows():
             # try inserting the orbiting body
-            query = """
+            command = """
                 INSERT INTO orbiting_bodies (body)
                 VALUES (%s)
                 ON CONFLICT (body)
                 DO NOTHING;
             """
 
-            self._execute_query(query, (row["orbiting_body"],))
+            self.cursor.execute(command, (row["orbiting_body"],))
             self.conn.commit()
 
             # get the id of the orbiting body
@@ -79,19 +90,20 @@ class SQLClient:
             
             body_id = result[0][0]
 
-            query = """
+            command = """
                 INSERT INTO close_approaches (
-                    reference_id, close_approach_date_epoch,
+                    reference_id,
+                    close_approach_date_stamp,
                     relative_velocity_kms, miss_distance_km,
                     orbiting_body
-                ) VALUES (%s, %s, %s, %s, %s);
+                ) VALUES (%s, TO_TIMESTAMP(%s / 1000), %s, %s, %s);
             """
             params = (
                 row["reference_id"], row["close_approach_date_epoch"],
                 row["relative_velocity_kms"], row["miss_distance_km"], body_id
             )
 
-            self._execute_query(query, params)
+            self.cursor.execute(command, params)
             self.conn.commit()
 
             logger.debug(f"Added a close approach data for NEO: {row['reference_id']}")
@@ -100,56 +112,54 @@ class SQLClient:
         self.conn.close()
 
     def _execute_query(self, query: str, params=None):
-        with self.conn.cursor() as cursor:
-            cursor.execute(query, params)
-            try:
-                result = cursor.fetchall()
-                return result
-            except pg.ProgrammingError:
-                return None
+        self.cursor.execute(query, params)
+        try:
+            result = self.cursor.fetchall()
+            return result
+        except pg.ProgrammingError:
+            return None
             
     def _create_neo_table(self):
-        query = """
+        command = """
             CREATE TABLE IF NOT EXISTS near_earth_objects (
-                reference_id INT PRIMARY KEY,
+                reference_id BIGINT PRIMARY KEY,
                 neo_name VARCHAR,
                 nasa_jpl_url VARCHAR,
-                absolute_magnitude_h FLOAT,
-                estimated_diameter_min_km FLOAT,
-                estimated_diameter_max_km FLOAT,
+                absolute_magnitude_h NUMERIC,
+                estimated_diameter_min_km NUMERIC,
+                estimated_diameter_max_km NUMERIC,
                 is_potentially_hazardous BOOLEAN,
                 is_sentry_object BOOLEAN
             );
         """
-        self._execute_query(query)
+        self.cursor.execute(command)
         self.conn.commit()
 
     def _create_approach_table(self):
-        query = """
+        command = """
             CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
             CREATE TABLE IF NOT EXISTS close_approaches (
                 id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                reference_id INT,
-                close_approach_date_epoch BIGINT,
-                relative_velocity_kms FLOAT,
-                miss_distance_km FLOAT,
+                reference_id BIGINT,
+                close_approach_date_stamp TIMESTAMPTZ,
+                relative_velocity_kms NUMERIC,
+                miss_distance_km NUMERIC,
                 orbiting_body INT,
                 FOREIGN KEY (reference_id) REFERENCES near_earth_objects(reference_id),
                 FOREIGN KEY (orbiting_body) REFERENCES orbiting_bodies(id)
             );
         """
-        self._execute_query(query)
+        self.cursor.execute(command)
         self.conn.commit()
 
     def _create_orbiting_body_table(self):
-        query = """
+        command = """
             CREATE TABLE IF NOT EXISTS orbiting_bodies (
                 id SERIAL PRIMARY KEY,
                 body VARCHAR UNIQUE
             )
-
         """
 
-        self._execute_query(query)
+        self.cursor.execute(command)
         self.conn.commit()
